@@ -196,30 +196,47 @@ ESX.SavePlayer = function(xPlayer, cb)
 end
 
 ESX.SavePlayers = function(cb)
-	local xPlayers, asyncTasks = ESX.GetPlayers(), {}
+	local xPlayers = ESX.GetExtendedPlayers()
+	if #xPlayers > 0 then
+		local time = os.time()
 
-	for i=1, #xPlayers, 1 do
-		table.insert(asyncTasks, function(cb2)
-			local xPlayer = ESX.GetPlayerFromId(xPlayers[i])
-			ESX.SavePlayer(xPlayer, cb2)
+		local selectListWithNames = "SELECT '%s' AS identifier, '%s' AS new_accounts, '%s' AS new_job, %s AS new_job_grade, '%s' AS new_group, '%s' AS new_loadout, '%s' AS new_position, '%s' AS new_inventory "
+		local selectListNoNames = "SELECT '%s', '%s', '%s' , %s, '%s', '%s', '%s', '%s' "
+
+		local updateCommand = 'UPDATE users u JOIN ('
+
+		local selectList = selectListNoNames
+		local first = true
+		for k, xPlayer in pairs(xPlayers) do
+			if first == false then
+				updateCommand = updateCommand .. ' UNION '
+			else
+				selectList = selectListWithNames
+			end
+
+			updateCommand = updateCommand .. string.format(selectList,
+				xPlayer.identifier,
+				json.encode(xPlayer.getAccounts(true)),
+				xPlayer.job.name,
+				xPlayer.job.grade,
+				xPlayer.getGroup(),
+				json.encode(xPlayer.getLoadout(true)),
+				json.encode(xPlayer.getCoords()),
+				json.encode(xPlayer.getInventory(true))
+			)
+	
+			first = false
+		end
+
+		updateCommand = updateCommand .. ' ) vals ON u.identifier = vals.identifier SET accounts = new_accounts, job = new_job, job_grade = new_job_grade, `group` = new_group, loadout = new_loadout, `position` = new_position, inventory = new_inventory'
+
+		MySQL.Async.fetchAll(updateCommand, {},
+		function(result)
+			if result then
+				if cb then cb() else print(('[^2INFO^7] Saved %s of %s player(s) over %s seconds'):format(result.affectedRows, #xPlayers, os.time() - time)) end
+			end
 		end)
 	end
-
-	Async.parallelLimit(asyncTasks, 8, function(results)
-		print(('[^2INFO^7] Saved ^5%s^0 player(s)'):format(#xPlayers))
-		if cb then
-			cb()
-		end
-	end)
-end
-
-ESX.StartDBSync = function()
-	function saveData()
-		ESX.SavePlayers()
-		SetTimeout(10 * 60 * 1000, saveData)
-	end
-
-	SetTimeout(10 * 60 * 1000, saveData)
 end
 
 ESX.GetPlayers = function()
@@ -232,8 +249,18 @@ ESX.GetPlayers = function()
 	return sources
 end
 
-ESX.GetExtendedPlayers = function()
-	return ESX.Players
+ESX.GetExtendedPlayers = function(key, val)
+	local xPlayers = {}
+	for k, v in pairs(ESX.Players) do
+		if key then
+			if (key == 'job' and v.job.name == val) or v[key] == val then
+				table.insert(xPlayers, v)
+			end
+		else
+			table.insert(xPlayers, v)
+		end
+	end
+	return xPlayers
 end
 
 ESX.GetPlayerFromId = function(source)

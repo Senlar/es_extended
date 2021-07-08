@@ -41,9 +41,12 @@ ESX.GetPlayerData = function()
 end
 
 ESX.SetPlayerData = function(key, val)
+	local current = ESX.PlayerData[key]
 	ESX.PlayerData[key] = val
 	if key ~= 'inventory' and key ~= 'loadout' then
-		TriggerEvent('esx:setPlayerData', key, val)
+		if type(val) == 'table' or val ~= current then
+			TriggerEvent('esx:setPlayerData', key, val, current)
+		end
 	end
 end
 
@@ -336,16 +339,13 @@ ESX.Game.Teleport = function(entity, coords, cb)
 end
 
 ESX.Game.SpawnObject = function(object, coords, cb, networked)
-	local model = (type(object) == 'number' and model or GetHashKey(object))
+	local model = type(object) == 'number' and object or GetHashKey(object)
 	local vector = type(coords) == "vector3" and coords or vec(coords.x, coords.y, coords.z)
 	networked = networked == nil and true or networked
 
 	Citizen.CreateThread(function()
 		ESX.Streaming.RequestModel(model)
 
-		-- The below has to be done just for CreateObject since for some reason CreateObjects model argument is set
-		-- as an Object instead of a hash so it doesn't automatically hash the item
-		model = type(model) == 'number' and model or GetHashKey(model)
 		local obj = CreateObject(model, vector.xyz, networked, false, true)
 		if cb then
 			cb(obj)
@@ -354,7 +354,6 @@ ESX.Game.SpawnObject = function(object, coords, cb, networked)
 end
 
 ESX.Game.SpawnLocalObject = function(object, coords, cb)
-	-- Why have 2 separate functions for this? Just call the other one with an extra param
 	ESX.Game.SpawnObject(object, coords, cb, false)
 end
 
@@ -399,7 +398,6 @@ ESX.Game.SpawnVehicle = function(vehicle, coords, heading, cb, networked)
 end
 
 ESX.Game.SpawnLocalVehicle = function(vehicle, coords, heading, cb)
-	-- Why have 2 separate functions for this? Just call the other one with an extra param
 	ESX.Game.SpawnVehicle(vehicle, coords, heading, cb, false)
 end
 
@@ -410,36 +408,24 @@ ESX.Game.IsVehicleEmpty = function(vehicle)
 	return passengers == 0 and driverSeatFree
 end
 
-ESX.Game.GetObjects = function()
-	local objects = {}
-
-	for object in EnumerateObjects() do
-		table.insert(objects, object)
-	end
-
-	return objects
+ESX.Game.GetObjects = function() -- Leave the function for compatibility
+	return GetGamePool('CObject')
 end
 
 ESX.Game.GetPeds = function(onlyOtherPeds)
-	local peds, myPed = {}, PlayerPedId()
+	local peds, myPed, pool = {}, ESX.PlayerData.ped, GetGamePool('CPed')
 
-	for ped in EnumeratePeds() do
-		if ((onlyOtherPeds and ped ~= myPed) or not onlyOtherPeds) then
-			table.insert(peds, ped)
-		end
-	end
+	for i=1, #pool do
+        if ((onlyOtherPeds and pool[i] ~= myPed) or not onlyOtherPeds) then
+            table.insert(peds, pool[i])
+        end
+    end
 
 	return peds
 end
 
-ESX.Game.GetVehicles = function()
-	local vehicles = {}
-
-	for vehicle in EnumerateVehicles() do
-		table.insert(vehicles, vehicle)
-	end
-
-	return vehicles
+ESX.Game.GetVehicles = function() -- Leave the function for compatibility
+	return GetGamePool('CVehicle')
 end
 
 ESX.Game.GetPlayers = function(onlyOtherPlayers, returnKeyValue, returnPeds)
@@ -460,13 +446,34 @@ ESX.Game.GetPlayers = function(onlyOtherPlayers, returnKeyValue, returnPeds)
 	return players
 end
 
-ESX.Game.GetClosestObject = function(coords, modelFilter) return ESX.Game.GetClosestEntity(ESX.Game.GetObjects(), false, coords, modelFilter) end
-ESX.Game.GetClosestPed = function(coords, modelFilter) return ESX.Game.GetClosestEntity(ESX.Game.GetPeds(true), false, coords, modelFilter) end
-ESX.Game.GetClosestPlayer = function(coords) return ESX.Game.GetClosestEntity(ESX.Game.GetPlayers(true, true), true, coords, nil) end
-ESX.Game.GetClosestVehicle = function(coords, modelFilter) return ESX.Game.GetClosestEntity(ESX.Game.GetVehicles(), false, coords, modelFilter) end
-ESX.Game.GetPlayersInArea = function(coords, maxDistance) return EnumerateEntitiesWithinDistance(ESX.Game.GetPlayers(true, true), true, coords, maxDistance) end
-ESX.Game.GetVehiclesInArea = function(coords, maxDistance) return EnumerateEntitiesWithinDistance(ESX.Game.GetVehicles(), false, coords, maxDistance) end
-ESX.Game.IsSpawnPointClear = function(coords, maxDistance) return #ESX.Game.GetVehiclesInArea(coords, maxDistance) == 0 end
+ESX.Game.GetClosestObject = function(coords, modelFilter)
+	return ESX.Game.GetClosestEntity(ESX.Game.GetObjects(), false, coords, modelFilter)
+end
+
+ESX.Game.GetClosestPed = function(coords, modelFilter)
+	return ESX.Game.GetClosestEntity(ESX.Game.GetPeds(true), false, coords, modelFilter)
+end
+
+ESX.Game.GetClosestPlayer = function(coords)
+	return ESX.Game.GetClosestEntity(ESX.Game.GetPlayers(true, true), true, coords, nil)
+end
+
+ESX.Game.GetClosestVehicle = function(coords, modelFilter)
+	return ESX.Game.GetClosestEntity(ESX.Game.GetVehicles(), false, coords, modelFilter)
+end
+
+ESX.Game.GetPlayersInArea = function(coords, maxDistance)
+	return EnumerateEntitiesWithinDistance(ESX.Game.GetPlayers(true, true), true, coords, maxDistance)
+end
+
+ESX.Game.GetVehiclesInArea = function(coords, maxDistance)
+	return EnumerateEntitiesWithinDistance(ESX.Game.GetVehicles(), false, coords, maxDistance)
+end
+
+ESX.Game.IsSpawnPointClear = function(coords, maxDistance)
+	return #ESX.Game.GetVehiclesInArea(coords, maxDistance) == 0
+end
+
 
 ESX.Game.GetClosestEntity = function(entities, isPlayerEntities, coords, modelFilter)
 	local closestEntity, closestEntityDistance, filteredEntities = -1, -1, nil
@@ -474,7 +481,7 @@ ESX.Game.GetClosestEntity = function(entities, isPlayerEntities, coords, modelFi
 	if coords then
 		coords = vector3(coords.x, coords.y, coords.z)
 	else
-		local playerPed = PlayerPedId()
+		local playerPed = ESX.PlayerData.ped
 		coords = GetEntityCoords(playerPed)
 	end
 
@@ -500,7 +507,7 @@ ESX.Game.GetClosestEntity = function(entities, isPlayerEntities, coords, modelFi
 end
 
 ESX.Game.GetVehicleInDirection = function()
-	local playerPed    = PlayerPedId()
+	local playerPed    = ESX.PlayerData.ped
 	local playerCoords = GetEntityCoords(playerPed)
 	local inDirection  = GetOffsetFromEntityInWorldCoords(playerPed, 0.0, 5.0, 0.0)
 	local rayHandle    = StartShapeTestRay(playerCoords, inDirection, 10, playerPed, 0)
@@ -733,7 +740,7 @@ ESX.Game.Utils.DrawText3D = function(coords, text, size, font)
 end
 
 ESX.ShowInventory = function()
-	local playerPed = PlayerPedId()
+	local playerPed = ESX.PlayerData.ped
 	local elements, currentWeight = {}, 0
 
 	for k,v in pairs(ESX.PlayerData.accounts) do
@@ -1004,23 +1011,17 @@ end)
 -- SetTimeout
 Citizen.CreateThread(function()
 	while true do
-		Citizen.Wait(0)
-		local letSleep = true
-		local currTime = GetGameTimer()
-
+		local sleep = 100
 		if #ESX.TimeoutCallbacks > 0 then
-			letSleep = false
+			local currTime = GetGameTimer()
+			sleep = 0
 			for i=1, #ESX.TimeoutCallbacks, 1 do
-				if ESX.TimeoutCallbacks[i] then
-					if currTime >= ESX.TimeoutCallbacks[i].time then
-						ESX.TimeoutCallbacks[i].cb()
-						ESX.TimeoutCallbacks[i] = nil
-					end
+				if currTime >= ESX.TimeoutCallbacks[i].time then
+					ESX.TimeoutCallbacks[i].cb()
+					ESX.TimeoutCallbacks[i] = nil
 				end
 			end
 		end
-		if letSleep then
-			Citizen.Wait(500)
-		end
+		Citizen.Wait(sleep)
 	end
 end)
