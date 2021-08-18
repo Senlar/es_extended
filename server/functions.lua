@@ -30,7 +30,7 @@ ESX.RegisterCommand = function(name, group, cb, allowConsole, suggestion)
 	end
 
 	if ESX.RegisteredCommands[name] then
-		print(('[^3WARNING^7] Command ^5"%s" already registered, overriding command'):format(name))
+		print(('[^3WARNING^7] Command ^5"%s" already registered, overriding command^0'):format(name))
 
 		if ESX.RegisteredCommands[name].suggestion then
 			TriggerClientEvent('chat:removeSuggestion', -1, ('/%s'):format(name))
@@ -164,8 +164,8 @@ ESX.TriggerServerCallback = function(name, requestId, source, cb, ...)
 end
 
 local savePlayers = -1
-Citizen.CreateThread(function()
-	savePlayers = MySQL.Sync.store("UPDATE users SET `accounts` = ?, `job` = ?, `job_grade` = ?, `group` = ?, `position` = ?, `inventory` = ?, `loadout` = ? WHERE `identifier` = ?")
+MySQL.Async.store("UPDATE users SET `accounts` = ?, `job` = ?, `job_grade` = ?, `group` = ?, `position` = ?, `inventory` = ? WHERE `identifier` = ?", function(storeId)
+	savePlayers = storeId
 end)
 
 ESX.SavePlayer = function(xPlayer, cb)
@@ -179,7 +179,6 @@ ESX.SavePlayer = function(xPlayer, cb)
 			xPlayer.getGroup(),
 			json.encode(xPlayer.getCoords()),
 			json.encode(xPlayer.getInventory(true)),
-			json.encode(xPlayer.getLoadout(true)),
 			xPlayer.getIdentifier()
 		}, function(rowsChanged)
 			cb2()
@@ -200,8 +199,8 @@ ESX.SavePlayers = function(cb)
 	if #xPlayers > 0 then
 		local time = os.time()
 
-		local selectListWithNames = "SELECT '%s' AS identifier, '%s' AS new_accounts, '%s' AS new_job, %s AS new_job_grade, '%s' AS new_group, '%s' AS new_loadout, '%s' AS new_position, '%s' AS new_inventory "
-		local selectListNoNames = "SELECT '%s', '%s', '%s' , %s, '%s', '%s', '%s', '%s' "
+		local selectListWithNames = "SELECT '%s' AS identifier, '%s' AS new_accounts, '%s' AS new_job, %s AS new_job_grade, '%s' AS new_group, '%s' AS new_position, '%s' AS new_inventory "
+		local selectListNoNames = "SELECT '%s', '%s', '%s', %s, '%s', '%s', '%s', '%s' "
 
 		local updateCommand = 'UPDATE users u JOIN ('
 
@@ -220,15 +219,14 @@ ESX.SavePlayers = function(cb)
 				xPlayer.job.name,
 				xPlayer.job.grade,
 				xPlayer.getGroup(),
-				json.encode(xPlayer.getLoadout(true)),
 				json.encode(xPlayer.getCoords()),
 				json.encode(xPlayer.getInventory(true))
 			)
-	
+
 			first = false
 		end
 
-		updateCommand = updateCommand .. ' ) vals ON u.identifier = vals.identifier SET accounts = new_accounts, job = new_job, job_grade = new_job_grade, `group` = new_group, loadout = new_loadout, `position` = new_position, inventory = new_inventory'
+		updateCommand = updateCommand .. ' ) vals ON u.identifier = vals.identifier SET accounts = new_accounts, job = new_job, job_grade = new_job_grade, `group` = new_group, `position` = new_position, inventory = new_inventory'
 
 		MySQL.Async.fetchAll(updateCommand, {},
 		function(result)
@@ -293,29 +291,22 @@ ESX.UseItem = function(source, item)
 end
 
 ESX.GetItemLabel = function(item)
-	if ESX.Items[item] then
-		return ESX.Items[item].label
+	local item = exports.ox_inventory:Items(item)
+	if item then
+		return item.label
 	end
 end
 
-ESX.CreatePickup = function(type, name, count, label, playerId, components, tintIndex)
-	local pickupId = (ESX.PickupId == 65635 and 0 or ESX.PickupId + 1)
-	local xPlayer = ESX.GetPlayerFromId(playerId)
-	local coords = xPlayer.getCoords()
+ESX.GetJobs = function()
+	return ESX.Jobs
+end
 
-	ESX.Pickups[pickupId] = {
-		type = type, name = name,
-		count = count, label = label,
-		coords = coords
-	}
-
-	if type == 'item_weapon' then
-		ESX.Pickups[pickupId].components = components
-		ESX.Pickups[pickupId].tintIndex = tintIndex
+ESX.GetUsableItems = function()
+	local Usables = {}
+	for k, v in pairs(ESX.UsableItemsCallbacks) do
+		Usables[k] = true
 	end
-
-	TriggerClientEvent('esx:createPickup', -1, pickupId, label, coords, type, name, components, tintIndex)
-	ESX.PickupId = pickupId
+	return Usables
 end
 
 ESX.DoesJobExist = function(job, grade)

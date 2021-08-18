@@ -1,18 +1,22 @@
-function CreateExtendedPlayer(playerId, identifier, group, accounts, inventory, weight, job, loadout, name, coords)
+local Inventory
+AddEventHandler('ox_inventory:loadInventory', function(module)
+	Inventory = module
+end)
+
+function CreateExtendedPlayer(playerId, identifier, group, accounts, job, name, coords)
 	local self = {}
 
 	self.accounts = accounts
 	self.coords = coords
 	self.group = group
 	self.identifier = identifier
-	self.inventory = inventory
+	self.inventory = {}
 	self.job = job
-	self.loadout = loadout
 	self.name = name
 	self.playerId = playerId
 	self.source = playerId
 	self.variables = {}
-	self.weight = weight
+	self.weight = 0
 	self.maxWeight = Config.MaxWeight
 	if Config.Multichar then self.license = 'license'..string.sub(identifier, 6) else self.license = 'license:'..identifier end
 
@@ -107,52 +111,27 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, inventory, 
 	end
 
 	self.getInventory = function(minimal)
-		if minimal then
-			local minimalInventory = {}
-
-			for k,v in ipairs(self.inventory) do
-				if v.count > 0 then
-					minimalInventory[v.name] = v.count
+		if minimal and next(self.inventory) then
+			local inventory = {}
+			for k, v in pairs(self.inventory) do
+				if v.count and v.count > 0 then
+					local metadata = v.metadata
+					if v.metadata and next(v.metadata) == nil then metadata = nil end
+					inventory[#inventory+1] = {
+						name = v.name,
+						count = v.count,
+						slot = k,
+						metadata = metadata
+					}
 				end
 			end
-
-			return minimalInventory
-		else
-			return self.inventory
+			return inventory
 		end
+		return self.inventory
 	end
 
 	self.getJob = function()
 		return self.job
-	end
-
-	self.getLoadout = function(minimal)
-		if minimal then
-			local minimalLoadout = {}
-
-			for k,v in ipairs(self.loadout) do
-				minimalLoadout[v.name] = {ammo = v.ammo}
-				if v.tintIndex > 0 then minimalLoadout[v.name].tintIndex = v.tintIndex end
-
-				if #v.components > 0 then
-					local components = {}
-
-					for k2,component in ipairs(v.components) do
-						if component ~= 'clip_default' then
-							table.insert(components, component)
-						end
-					end
-
-					if #components > 0 then
-						minimalLoadout[v.name].components = components
-					end
-				end
-			end
-
-			return minimalLoadout
-		else
-			return self.loadout
-		end
 	end
 
 	self.getName = function()
@@ -171,7 +150,7 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, inventory, 
 				local prevMoney = account.money
 				local newMoney = ESX.Math.Round(money)
 				account.money = newMoney
-
+				if accountName ~= 'bank' then Inventory.SetItem(self.source, accountName, money) end
 				self.triggerEvent('esx:setAccountMoney', account)
 			end
 		end
@@ -184,7 +163,7 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, inventory, 
 			if account then
 				local newMoney = account.money + ESX.Math.Round(money)
 				account.money = newMoney
-
+				if accountName ~= 'bank' then Inventory.AddItem(self.source, accountName, money) end
 				self.triggerEvent('esx:setAccountMoney', account)
 			end
 		end
@@ -197,64 +176,26 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, inventory, 
 			if account then
 				local newMoney = account.money - ESX.Math.Round(money)
 				account.money = newMoney
-
+				if accountName ~= 'bank' then Inventory.RemoveItem(self.source, accountName, money) end
 				self.triggerEvent('esx:setAccountMoney', account)
 			end
 		end
 	end
 
-	self.getInventoryItem = function(name)
-		for k,v in ipairs(self.inventory) do
-			if v.name == name then
-				return v
-			end
-		end
-
-		return
+	self.getInventoryItem = function(name, metadata)
+		return Inventory.GetItem(self.source, name, metadata)
 	end
 
-	self.addInventoryItem = function(name, count)
-		local item = self.getInventoryItem(name)
-
-		if item then
-			count = ESX.Math.Round(count)
-			item.count = item.count + count
-			self.weight = self.weight + (item.weight * count)
-
-			TriggerEvent('esx:onAddInventoryItem', self.source, item.name, item.count)
-			self.triggerEvent('esx:addInventoryItem', item.name, item.count)
-		end
+	self.addInventoryItem = function(name, count, metadata, slot)
+		Inventory.AddItem(self.source, name, count, metadata, slot)
 	end
 
-	self.removeInventoryItem = function(name, count)
-		local item = self.getInventoryItem(name)
-
-		if item then
-			count = ESX.Math.Round(count)
-			local newCount = item.count - count
-
-			if newCount >= 0 then
-				item.count = newCount
-				self.weight = self.weight - (item.weight * count)
-
-				TriggerEvent('esx:onRemoveInventoryItem', self.source, item.name, item.count)
-				self.triggerEvent('esx:removeInventoryItem', item.name, item.count)
-			end
-		end
+	self.removeInventoryItem = function(name, count, metadata)
+		Inventory.RemoveItem(self.source, name, count, metadata)
 	end
 
-	self.setInventoryItem = function(name, count)
-		local item = self.getInventoryItem(name)
-
-		if item and count >= 0 then
-			count = ESX.Math.Round(count)
-
-			if count > item.count then
-				self.addInventoryItem(item.name, count - item.count)
-			else
-				self.removeInventoryItem(item.name, item.count - count)
-			end
-		end
+	self.setInventoryItem = function(name, count, metadata)
+		Inventory.SetItem(self.source, name, count, metadata)
 	end
 
 	self.getWeight = function()
@@ -266,29 +207,16 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, inventory, 
 	end
 
 	self.canCarryItem = function(name, count)
-		local currentWeight, itemWeight = self.weight, ESX.Items[name].weight
-		local newWeight = currentWeight + (itemWeight * count)
-
-		return newWeight <= self.maxWeight
+		return Inventory.CanCarryItem(self.source, name, count, metadata)
 	end
 
 	self.canSwapItem = function(firstItem, firstItemCount, testItem, testItemCount)
-		local firstItemObject = self.getInventoryItem(firstItem)
-		local testItemObject = self.getInventoryItem(testItem)
-
-		if firstItemObject.count >= firstItemCount then
-			local weightWithoutFirstItem = ESX.Math.Round(self.weight - (firstItemObject.weight * firstItemCount))
-			local weightWithTestItem = ESX.Math.Round(weightWithoutFirstItem + (testItemObject.weight * testItemCount))
-
-			return weightWithTestItem <= self.maxWeight
-		end
-
-		return false
+		return Inventory.CanSwapItem(self.source, firstItem, firstItemCount, testItem, testItemCount)
 	end
 
 	self.setMaxWeight = function(newWeight)
 		self.maxWeight = newWeight
-		self.triggerEvent('esx:setMaxWeight', self.maxWeight)
+		return exports.ox_inventory:Inventory(self.source):set('weight', newWeight)
 	end
 
 	self.setJob = function(job, grade)
@@ -326,177 +254,30 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, inventory, 
 		end
 	end
 
-	self.addWeapon = function(weaponName, ammo)
-		if not self.hasWeapon(weaponName) then
-			local weaponLabel = ESX.GetWeaponLabel(weaponName)
-
-			table.insert(self.loadout, {
-				name = weaponName,
-				ammo = ammo,
-				label = weaponLabel,
-				components = {},
-				tintIndex = 0
-			})
-
-			self.triggerEvent('esx:addWeapon', weaponName, ammo)
-			self.triggerEvent('esx:addInventoryItem', weaponLabel, false, true)
-		end
-	end
-
-	self.addWeaponComponent = function(weaponName, weaponComponent)
-		local loadoutNum, weapon = self.getWeapon(weaponName)
-
-		if weapon then
-			local component = ESX.GetWeaponComponent(weaponName, weaponComponent)
-
-			if component then
-				if not self.hasWeaponComponent(weaponName, weaponComponent) then
-					table.insert(self.loadout[loadoutNum].components, weaponComponent)
-					self.triggerEvent('esx:addWeaponComponent', weaponName, weaponComponent)
-					self.triggerEvent('esx:addInventoryItem', component.label, false, true)
-				end
-			end
-		end
-	end
-
-	self.addWeaponAmmo = function(weaponName, ammoCount)
-		local loadoutNum, weapon = self.getWeapon(weaponName)
-
-		if weapon then
-			weapon.ammo = weapon.ammo + ammoCount
-			self.triggerEvent('esx:setWeaponAmmo', weaponName, weapon.ammo)
-		end
-	end
-
-	self.updateWeaponAmmo = function(weaponName, ammoCount)
-		local loadoutNum, weapon = self.getWeapon(weaponName)
-
-		if weapon then
-			if ammoCount < weapon.ammo then
-				weapon.ammo = ammoCount
-			end
-		end
-	end
-
-	self.setWeaponTint = function(weaponName, weaponTintIndex)
-		local loadoutNum, weapon = self.getWeapon(weaponName)
-
-		if weapon then
-			local weaponNum, weaponObject = ESX.GetWeapon(weaponName)
-
-			if weaponObject.tints and weaponObject.tints[weaponTintIndex] then
-				self.loadout[loadoutNum].tintIndex = weaponTintIndex
-				self.triggerEvent('esx:setWeaponTint', weaponName, weaponTintIndex)
-				self.triggerEvent('esx:addInventoryItem', weaponObject.tints[weaponTintIndex], false, true)
-			end
-		end
-	end
-
-	self.getWeaponTint = function(weaponName)
-		local loadoutNum, weapon = self.getWeapon(weaponName)
-
-		if weapon then
-			return weapon.tintIndex
-		end
-
-		return 0
-	end
-
-	self.removeWeapon = function(weaponName)
-		local weaponLabel
-
-		for k,v in ipairs(self.loadout) do
-			if v.name == weaponName then
-				weaponLabel = v.label
-
-				for k2,v2 in ipairs(v.components) do
-					self.removeWeaponComponent(weaponName, v2)
-				end
-
-				table.remove(self.loadout, k)
-				break
-			end
-		end
-
-		if weaponLabel then
-			self.triggerEvent('esx:removeWeapon', weaponName)
-			self.triggerEvent('esx:removeInventoryItem', weaponLabel, false, true)
-		end
-	end
-
-	self.removeWeaponComponent = function(weaponName, weaponComponent)
-		local loadoutNum, weapon = self.getWeapon(weaponName)
-
-		if weapon then
-			local component = ESX.GetWeaponComponent(weaponName, weaponComponent)
-
-			if component then
-				if self.hasWeaponComponent(weaponName, weaponComponent) then
-					for k,v in ipairs(self.loadout[loadoutNum].components) do
-						if v == weaponComponent then
-							table.remove(self.loadout[loadoutNum].components, k)
-							break
-						end
-					end
-
-					self.triggerEvent('esx:removeWeaponComponent', weaponName, weaponComponent)
-					self.triggerEvent('esx:removeInventoryItem', component.label, false, true)
-				end
-			end
-		end
-	end
-
-	self.removeWeaponAmmo = function(weaponName, ammoCount)
-		local loadoutNum, weapon = self.getWeapon(weaponName)
-
-		if weapon then
-			weapon.ammo = weapon.ammo - ammoCount
-			self.triggerEvent('esx:setWeaponAmmo', weaponName, weapon.ammo)
-		end
-	end
-
-	self.hasWeaponComponent = function(weaponName, weaponComponent)
-		local loadoutNum, weapon = self.getWeapon(weaponName)
-
-		if weapon then
-			for k,v in ipairs(weapon.components) do
-				if v == weaponComponent then
-					return true
-				end
-			end
-
-			return false
-		else
-			return false
-		end
-	end
-
-	self.hasWeapon = function(weaponName)
-		for k,v in ipairs(self.loadout) do
-			if v.name == weaponName then
-				return true
-			end
-		end
-
-		return false
-	end
-
-	self.getWeapon = function(weaponName)
-		for k,v in ipairs(self.loadout) do
-			if v.name == weaponName then
-				return k, v
-			end
-		end
-
-		return
-	end
-
 	self.showNotification = function(msg)
 		self.triggerEvent('esx:showNotification', msg)
 	end
 
 	self.showHelpNotification = function(msg, thisFrame, beep, duration)
 		self.triggerEvent('esx:showHelpNotification', msg, thisFrame, beep, duration)
+	end
+
+	self.syncInventory = function(weight, maxWeight, items, money)
+		self.weight, self.maxWeight = weight, maxWeight
+		self.inventory = items
+		if money then
+			for k, v in pairs(money) do
+				local account = self.getAccount(k)
+				if ESX.Math.Round(account.money) ~= v then
+					account.money = v
+					self.triggerEvent('esx:setAccountMoney', account)
+				end
+			end
+		end
+	end
+
+	self.getPlayerSlot = function(slot)
+		return self.inventory[slot]
 	end
 
 	return self

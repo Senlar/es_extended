@@ -78,16 +78,16 @@ files {
 	'html/img/accounts/money.png'
 }
 
+dependencies {
+	'mysql-async',
+	'async',
+	'spawnmanager',
+}
+
 exports {
 	'getSharedObject'
 }
 
 server_exports {
 	'getSharedObject'
-}
-
-dependencies {
-	'mysql-async',
-	'async',
-	'spawnmanager',
 }
