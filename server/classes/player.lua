@@ -18,7 +18,7 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, job, name, 
 	self.variables = {}
 	self.weight = 0
 	self.maxWeight = Config.MaxWeight
-	if Config.Multichar then self.license = 'license'..string.sub(identifier, 6) else self.license = 'license:'..identifier end
+	if Config.Multichar then self.license = Config.Identifier .. string.sub(identifier, 6) else self.license = Config.Identifier .. ':'..identifier end
 
 	ExecuteCommand(('add_principal identifier.%s group.%s'):format(self.license, self.group))
 
