@@ -2,33 +2,24 @@ ESX = exports['es_extended']:getSharedObject()
 ------------------------------------------------------------------------
 -- SHARED
 ------------------------------------------------------------------------
-local CreateThread = CreateThread
-local Wait = Wait
-
 local Intervals = {}
-local CreateInterval = function(name, interval, action, clear)
-	local self = {interval = interval}
-	CreateThread(function()
-		local name, action, clear = name, action, clear
-		repeat
-			action()
-			Wait(self.interval)
-		until self.interval == -1
-		if clear then clear() end
-		Intervals[name] = nil
-	end)
-	return self
-end
-
-SetInterval = function(name, interval, action, clear)
-	if Intervals[name] and interval then Intervals[name].interval = interval
+SetInterval = function(id, msec, callback, onclear)
+	if Intervals[id] and msec then
+		Intervals[id] = msec
 	else
-		Intervals[name] = CreateInterval(name, interval, action, clear)
+		CreateThread(function()
+			Intervals[id] = msec
+			repeat
+				Wait(Intervals[id])
+				callback(Intervals[id])
+			until Intervals[id] == -1 and (onclear and onclear() or true)
+			Intervals[id] = nil
+		end)
 	end
 end
 
-ClearInterval = function(name)
-	if Intervals[name] then Intervals[name].interval = -1 end
+ClearInterval = function(id)
+	if Intervals[id] then Intervals[id] = -1 end
 end
 
 ------------------------------------------------------------------------
