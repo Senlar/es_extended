@@ -1,6 +1,6 @@
-Citizen.CreateThread(function()
+CreateThread(function()
 	while not Config.Multichar do
-		Citizen.Wait(0)
+		Wait(0)
 		if NetworkIsPlayerActive(PlayerId()) then
 			exports.spawnmanager:setAutoSpawn(false)
 			DoScreenFadeOut(0)
@@ -18,7 +18,7 @@ AddEventHandler('esx:playerLoaded', function(xPlayer, isNew, skin)
 	FreezeEntityPosition(PlayerPedId(), true)
 
 	if Config.Multichar then
-		Citizen.Wait(3000)
+		Wait(3000)
 	else
 		exports.spawnmanager:spawnPlayer({
 			x = ESX.PlayerData.coords.x,
@@ -46,7 +46,7 @@ AddEventHandler('esx:playerLoaded', function(xPlayer, isNew, skin)
 		end)
 	end
 
-	while ESX.PlayerData.ped == nil do Citizen.Wait(20) end
+	while ESX.PlayerData.ped == nil do Wait(20) end
 	-- enable PVP
 	if Config.EnablePVP then
 		SetCanAttackFriendly(ESX.PlayerData.ped, true, false)
@@ -157,7 +157,7 @@ AddEventHandler('esx:deleteVehicle', function(radius)
 			local attempt = 0
 
 			while not NetworkHasControlOfEntity(entity) and attempt < 100 and DoesEntityExist(entity) do
-				Citizen.Wait(100)
+				Wait(100)
 				NetworkRequestControlOfEntity(entity)
 				attempt = attempt + 1
 			end
@@ -174,7 +174,7 @@ AddEventHandler('esx:deleteVehicle', function(radius)
 		end
 
 		while not NetworkHasControlOfEntity(vehicle) and attempt < 100 and DoesEntityExist(vehicle) do
-			Citizen.Wait(100)
+			Wait(100)
 			NetworkRequestControlOfEntity(vehicle)
 			attempt = attempt + 1
 		end
@@ -187,10 +187,10 @@ end)
 
 -- Pause menu disables HUD display
 if Config.EnableHud then
-	Citizen.CreateThread(function()
+	CreateThread(function()
 		local isPaused = false
 		while true do
-			Citizen.Wait(300)
+			Wait(300)
 
 			if IsPauseMenuActive() and not isPaused then
 				isPaused = true
@@ -209,7 +209,7 @@ end
 
 function StartServerSyncLoops()
 	-- sync current player coords with server
-	Citizen.CreateThread(function()
+	CreateThread(function()
 		local previousCoords = vector3(ESX.PlayerData.coords.x, ESX.PlayerData.coords.y, ESX.PlayerData.coords.z)
 
 		while ESX.PlayerLoaded do
@@ -227,7 +227,7 @@ function StartServerSyncLoops()
 					TriggerServerEvent('esx:updateCoords', formattedCoords)
 				end
 			end
-			Citizen.Wait(1500)
+			Wait(1500)
 		end
 	end)
 end

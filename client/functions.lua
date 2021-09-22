@@ -302,7 +302,7 @@ ESX.Game.GetPedMugshot = function(ped, transparent)
 		end
 
 		while not IsPedheadshotReady(mugshot) do
-			Citizen.Wait(0)
+			Wait(0)
 		end
 
 		return mugshot, GetPedheadshotTxdString(mugshot)
@@ -317,7 +317,7 @@ ESX.Game.Teleport = function(entity, coords, cb)
 	if DoesEntityExist(entity) then
 		RequestCollisionAtCoord(vector.xyz)
 		while not HasCollisionLoadedAroundEntity(entity) do
-			Citizen.Wait(0)
+			Wait(0)
 		end
 
 		SetEntityCoords(entity, vector.xyz, false, false, false, false)
@@ -334,7 +334,7 @@ ESX.Game.SpawnObject = function(object, coords, cb, networked)
 	local vector = type(coords) == "vector3" and coords or vec(coords.x, coords.y, coords.z)
 	networked = networked == nil and true or networked
 
-	Citizen.CreateThread(function()
+	CreateThread(function()
 		ESX.Streaming.RequestModel(model)
 
 		local obj = CreateObject(model, vector.xyz, networked, false, true)
@@ -362,7 +362,7 @@ ESX.Game.SpawnVehicle = function(vehicle, coords, heading, cb, networked)
 	local model = (type(vehicle) == 'number' and vehicle or GetHashKey(vehicle))
 	local vector = type(coords) == "vector3" and coords or vec(coords.x, coords.y, coords.z)
 	networked = networked == nil and true or networked
-	Citizen.CreateThread(function()
+	CreateThread(function()
 		ESX.Streaming.RequestModel(model)
 
 		local vehicle = CreateVehicle(model, vector.xyz, heading, networked, false)
@@ -379,7 +379,7 @@ ESX.Game.SpawnVehicle = function(vehicle, coords, heading, cb, networked)
 
 		RequestCollisionAtCoord(vector.xyz)
 		while not HasCollisionLoadedAroundEntity(vehicle) do
-			Citizen.Wait(0)
+			Wait(0)
 		end
 
 		if cb then
@@ -773,7 +773,7 @@ AddEventHandler('esx:showHelpNotification', function(msg, thisFrame, beep, durat
 end)
 
 -- SetTimeout
-Citizen.CreateThread(function()
+CreateThread(function()
 	while true do
 		local sleep = 100
 		if #ESX.TimeoutCallbacks > 0 then
@@ -786,6 +786,6 @@ Citizen.CreateThread(function()
 				end
 			end
 		end
-		Citizen.Wait(sleep)
+		Wait(sleep)
 	end
 end)

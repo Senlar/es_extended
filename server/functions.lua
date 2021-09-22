@@ -163,34 +163,20 @@ ESX.TriggerServerCallback = function(name, requestId, source, cb, ...)
 	end
 end
 
-local savePlayers = -1
-MySQL.Async.store("UPDATE users SET `accounts` = ?, `job` = ?, `job_grade` = ?, `group` = ?, `position` = ?, `inventory` = ? WHERE `identifier` = ?", function(storeId)
-	savePlayers = storeId
-end)
-
 ESX.SavePlayer = function(xPlayer, cb)
-	local asyncTasks = {}
-
-	table.insert(asyncTasks, function(cb2)
-		MySQL.Async.execute(savePlayers, {
-			json.encode(xPlayer.getAccounts(true)),
-			xPlayer.job.name,
-			xPlayer.job.grade,
-			xPlayer.getGroup(),
-			json.encode(xPlayer.getCoords()),
-			json.encode(xPlayer.getInventory(true)),
-			xPlayer.getIdentifier()
-		}, function(rowsChanged)
-			cb2()
-		end)
-	end)
-
-	Async.parallel(asyncTasks, function(results)
-		print(('[^2INFO^7] Saved player ^5"%s^7"'):format(xPlayer.getName()))
-
-		if cb then
-			cb()
+	exports.oxmysql:execute("UPDATE users SET `accounts` = ?, `job` = ?, `job_grade` = ?, `group` = ?, `position` = ?, `inventory` = ? WHERE `identifier` = ?", {
+		json.encode(xPlayer.getAccounts(true)),
+		xPlayer.job.name,
+		xPlayer.job.grade,
+		xPlayer.group,
+		json.encode(xPlayer.getCoords()),
+		json.encode(xPlayer.getInventory(true)),
+		xPlayer.identifier
+	}, function(data)
+		if data.affectedRows == 1 then
+			print(('[^2INFO^7] Saved player ^5"%s^7"'):format(xPlayer.name))
 		end
+		if cb then cb() end
 	end)
 end
 
@@ -200,13 +186,13 @@ ESX.SavePlayers = function(cb)
 		local time = os.time()
 
 		local selectListWithNames = "SELECT '%s' AS identifier, '%s' AS new_accounts, '%s' AS new_job, %s AS new_job_grade, '%s' AS new_group, '%s' AS new_position, '%s' AS new_inventory "
-		local selectListNoNames = "SELECT '%s', '%s', '%s', %s, '%s', '%s', '%s', '%s' "
+		local selectListNoNames = "SELECT '%s', '%s', '%s' , %s, '%s', '%s', '%s', '%s' "
 
 		local updateCommand = 'UPDATE users u JOIN ('
 
 		local selectList = selectListNoNames
 		local first = true
-		for k, xPlayer in pairs(xPlayers) do
+		for _, xPlayer in pairs(xPlayers) do
 			if first == false then
 				updateCommand = updateCommand .. ' UNION '
 			else
@@ -218,7 +204,7 @@ ESX.SavePlayers = function(cb)
 				json.encode(xPlayer.getAccounts(true)),
 				xPlayer.job.name,
 				xPlayer.job.grade,
-				xPlayer.getGroup(),
+				xPlayer.group,
 				json.encode(xPlayer.getCoords()),
 				json.encode(xPlayer.getInventory(true))
 			)
@@ -228,10 +214,10 @@ ESX.SavePlayers = function(cb)
 
 		updateCommand = updateCommand .. ' ) vals ON u.identifier = vals.identifier SET accounts = new_accounts, job = new_job, job_grade = new_job_grade, `group` = new_group, `position` = new_position, inventory = new_inventory'
 
-		MySQL.Async.fetchAll(updateCommand, {},
-		function(result)
-			if result then
-				if cb then cb() else print(('[^2INFO^7] Saved %s of %s player(s) over %s seconds'):format(result.affectedRows, #xPlayers, os.time() - time)) end
+		exports.oxmysql:execute(updateCommand, {},
+		function(data)
+			if data.affectedRows > 0 then
+				if cb then cb() else print(('[^2INFO^7] Saved %s of %s player(s) over %s seconds'):format(data.affectedRows, #xPlayers, os.time() - time)) end
 			end
 		end)
 	end
@@ -239,34 +225,32 @@ end
 
 ESX.GetPlayers = function()
 	local sources = {}
-
-	for k,v in pairs(ESX.Players) do
-		table.insert(sources, k)
+	for k in pairs(ESX.Players) do
+		sources[#sources+1] = k
 	end
-
 	return sources
 end
 
 ESX.GetExtendedPlayers = function(key, val)
 	local xPlayers = {}
-	for k, v in pairs(ESX.Players) do
+	for _, v in pairs(ESX.Players) do
 		if key then
-			if (key == 'job' and v.job.name == val) or v[key] == val then
-				table.insert(xPlayers, v)
+			if (key == 'job' and v.job.name == val) or v[key] == val or v.variables[key] == val then
+				xPlayers[#xPlayers+1] = v
 			end
 		else
-			table.insert(xPlayers, v)
+			xPlayers[#xPlayers+1] = v
 		end
 	end
 	return xPlayers
 end
 
 ESX.GetPlayerFromId = function(source)
-	return ESX.Players[tonumber(source)]
+	return ESX.Players[source]
 end
 
 ESX.GetPlayerFromIdentifier = function(identifier)
-	for k,v in pairs(ESX.Players) do
+	for _,v in pairs(ESX.Players) do
 		if v.identifier == identifier then
 			return v
 		end
@@ -275,7 +259,7 @@ end
 
 ESX.GetIdentifier = function(playerId)
 	local identifier = Config.Identifier..':'
-	for k,v in ipairs(GetPlayerIdentifiers(playerId)) do
+	for _, v in pairs(GetPlayerIdentifiers(playerId)) do
 		if string.match(v, identifier) then
 			return string.gsub(v, identifier, '')
 		end
@@ -291,7 +275,7 @@ ESX.UseItem = function(source, item)
 end
 
 ESX.GetItemLabel = function(item)
-	local item = exports.ox_inventory:Items(item)
+	item = exports.ox_inventory:Items(item)
 	if item then
 		return item.label
 	end
@@ -303,20 +287,17 @@ end
 
 ESX.GetUsableItems = function()
 	local Usables = {}
-	for k, v in pairs(ESX.UsableItemsCallbacks) do
+	for k in pairs(ESX.UsableItemsCallbacks) do
 		Usables[k] = true
 	end
 	return Usables
 end
 
 ESX.DoesJobExist = function(job, grade)
-	grade = tostring(grade)
-
 	if job and grade then
-		if ESX.Jobs[job] and ESX.Jobs[job].grades[grade] then
+		if ESX.Jobs[job]?.grades[grade] then
 			return true
 		end
 	end
-
 	return false
 end

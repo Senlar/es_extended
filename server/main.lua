@@ -1,26 +1,14 @@
-local NewPlayer, LoadPlayer = -1, -1
-Citizen.CreateThread(function()
+local NewPlayer, LoadPlayer
+CreateThread(function()
 	SetMapName('San Andreas')
 	SetGameType('ESX Legacy')
 
-	local query = '`accounts`, `job`, `job_grade`, `group`, `position`, `inventory`, `skin`' -- Select these fields from the database
-	if Config.Multichar or Config.Identity then	-- append these fields to the select query
-		query = query..', `firstname`, `lastname`, `dateofbirth`, `sex`, `height`'
-	end
+	local query = '`accounts`, `job`, `job_grade`, `group`, `position`, `inventory`, `skin`'
+	if Config.Multichar or Config.Identity then query = query..', `firstname`, `lastname`, `dateofbirth`, `sex`, `height`' end
+	LoadPlayer = "SELECT "..query.." FROM users WHERE identifier = ?"
 
-	if Config.Multichar then -- insert identity data with creation
-		MySQL.Async.store("INSERT INTO `users` SET `accounts` = ?, `identifier` = ?, `group` = ?, `firstname` = ?, `lastname` = ?, `dateofbirth` = ?, `sex` = ?, `height` = ?", function(storeId)
-			NewPlayer = storeId
-		end)
-	else
-		MySQL.Async.store("INSERT INTO `users` SET `accounts` = ?, `identifier` = ?, `group` = ?", function(storeId)
-			NewPlayer = storeId
-		end)
-	end
-
-	MySQL.Async.store("SELECT "..query.." FROM `users` WHERE identifier = ?", function(storeId)
-		LoadPlayer = storeId
-	end)
+	if Config.Multichar then NewPlayer = "INSERT INTO users SET `accounts` = ?, `identifier` = ?, `group` = ?, `firstname` = ?, `lastname` = ?, `dateofbirth` = ?, `sex` = ?, `height` = ?"
+	else NewPlayer = "INSERT INTO users SET `accounts` = ?, `identifier` = ?, `group` = ?" end
 end)
 
 if Config.Multichar then
@@ -35,8 +23,7 @@ if Config.Multichar then
 		end
 	end)
 else
-	RegisterNetEvent('esx:onPlayerJoined')
-	AddEventHandler('esx:onPlayerJoined', function()
+	RegisterServerEvent('esx:onPlayerJoined', function()
 		if not ESX.Players[source] then
 			onPlayerJoined(source)
 		end
@@ -49,8 +36,8 @@ function onPlayerJoined(playerId)
 		if ESX.GetPlayerFromIdentifier(identifier) then
 			DropPlayer(playerId, ('there was an error loading your character!\nError code: identifier-active-ingame\n\nThis error is caused by a player on this server who has the same identifier as you have. Make sure you are not playing on the same Rockstar account.\n\nYour Rockstar identifier: %s'):format(identifier))
 		else
-			MySQL.Async.fetchScalar('SELECT 1 FROM users WHERE identifier = @identifier', {
-				['@identifier'] = identifier
+			exports.oxmysql:scalar('SELECT 1 FROM users WHERE identifier = ?', {
+				identifier
 			}, function(result)
 				if result then
 					loadESXPlayer(identifier, playerId, false)
@@ -69,32 +56,32 @@ function createESXPlayer(identifier, playerId, data)
 		accounts[account] = money
 	end
 
-	if IsPlayerAceAllowed(playerId, "command") then
+	if IsPlayerAceAllowed(playerId, 'command') then
 		print(('^2[INFO] ^0 Player ^5%s ^0Has been granted admin permissions via ^5Ace Perms.^7'):format(playerId))
-		defaultGroup = "admin"
+		defaultGroup = 'admin'
 	else
-		defaultGroup = "user"
+		defaultGroup = 'user'
 	end
 
 	if not Config.Multichar then
-		MySQL.Async.execute(NewPlayer, {
-				json.encode(accounts),
-				identifier,
-				defaultGroup,
-		}, function(rowsChanged)
+		exports.oxmysql:execute(NewPlayer, {
+			json.encode(accounts),
+			identifier,
+			defaultGroup,
+		}, function(data)
 			loadESXPlayer(identifier, playerId, true)
 		end)
 	else
-		MySQL.Async.execute(NewPlayer, {
-				json.encode(accounts),
-				identifier,
-				defaultGroup,
-				data.firstname,
-				data.lastname,
-				data.dateofbirth,
-				data.sex,
-				data.height,
-		}, function(rowsChanged)
+		exports.oxmysql:execute(NewPlayer, {
+			json.encode(accounts),
+			identifier,
+			defaultGroup,
+			data.firstname,
+			data.lastname,
+			data.dateofbirth,
+			data.sex,
+			data.height,
+		}, function(data)
 			loadESXPlayer(identifier, playerId, true)
 		end)
 	end
@@ -104,7 +91,7 @@ AddEventHandler('playerConnecting', function(name, setCallback, deferrals)
 	deferrals.defer()
 	local playerId = source
 	local identifier = ESX.GetIdentifier(playerId)
-	Citizen.Wait(100)
+	Wait(100)
 
 	if identifier then
 		if ESX.GetPlayerFromIdentifier(identifier) then
@@ -118,104 +105,100 @@ AddEventHandler('playerConnecting', function(name, setCallback, deferrals)
 end)
 
 function loadESXPlayer(identifier, playerId, isNew)
-	local tasks = {}
-
 	local userData = {
 		accounts = {},
 		inventory = {},
 		job = {},
 		playerName = GetPlayerName(playerId)
 	}
+	exports.oxmysql:single(LoadPlayer, { identifier
+	}, function(result)
+		local foundAccounts, job, grade, jobObject, gradeObject = {}, result.job, result.job_grade, nil, nil
+		local Player = Player(playerId).state
 
-	table.insert(tasks, function(cb)
-		MySQL.Async.fetchAll(LoadPlayer, { identifier
-		}, function(result)
-			local job, grade, jobObject, gradeObject = result[1].job, tostring(result[1].job_grade)
-			local foundAccounts = {}
+		-- Accounts
+		if result.accounts and result.accounts ~= '' then
+			local accounts = json.decode(result.accounts)
 
-			-- Accounts
-			if result[1].accounts and result[1].accounts ~= '' then
-				local accounts = json.decode(result[1].accounts)
-
-				for account,money in pairs(accounts) do
-					foundAccounts[account] = money
-				end
+			for account,money in pairs(accounts) do
+				foundAccounts[account] = money
 			end
+		end
 
-			for account,label in pairs(Config.Accounts) do
-				table.insert(userData.accounts, {
-					name = account,
-					money = foundAccounts[account] or Config.StartingAccountMoney[account] or 0,
-					label = label
-				})
-			end
+		for account,label in pairs(Config.Accounts) do
+			table.insert(userData.accounts, {
+				name = account,
+				money = foundAccounts[account] or Config.StartingAccountMoney[account] or 0,
+				label = label
+			})
+		end
 
-			-- Job
-			if ESX.DoesJobExist(job, grade) then
-				jobObject, gradeObject = ESX.Jobs[job], ESX.Jobs[job].grades[grade]
-			else
-				print(('[^3WARNING^7] Ignoring invalid job for %s [job: %s, grade: %s]'):format(identifier, job, grade))
-				job, grade = 'unemployed', '0'
-				jobObject, gradeObject = ESX.Jobs[job], ESX.Jobs[job].grades[grade]
-			end
+		-- Job
+		if ESX.DoesJobExist(job, grade) then
+			jobObject, gradeObject = ESX.Jobs[job], ESX.Jobs[job].grades[grade]
+		else
+			print(('[^3WARNING^7] Ignoring invalid job for %s [job: %s, grade: %s]'):format(identifier, job, grade))
+			job, grade = 'unemployed', 0
+			jobObject, gradeObject = ESX.Jobs[job], ESX.Jobs[job].grades[grade]
+		end
 
-			userData.job.id = jobObject.id
-			userData.job.name = jobObject.name
-			userData.job.label = jobObject.label
+		userData.job.id = jobObject.id
+		userData.job.name = jobObject.name
+		userData.job.label = jobObject.label
 
-			userData.job.grade = tonumber(grade)
-			userData.job.grade_name = gradeObject.name
-			userData.job.grade_label = gradeObject.label
-			userData.job.grade_salary = gradeObject.salary
+		userData.job.grade = grade
+		userData.job.grade_name = gradeObject.name
+		userData.job.grade_label = gradeObject.label
+		userData.job.grade_salary = gradeObject.salary
 
-			userData.job.skin_male = {}
-			userData.job.skin_female = {}
+		userData.job.skin_male = {}
+		userData.job.skin_female = {}
 
-			if gradeObject.skin_male then userData.job.skin_male = json.decode(gradeObject.skin_male) end
-			if gradeObject.skin_female then userData.job.skin_female = json.decode(gradeObject.skin_female) end
+		if gradeObject.skin_male then userData.job.skin_male = json.decode(gradeObject.skin_male) end
+		if gradeObject.skin_female then userData.job.skin_female = json.decode(gradeObject.skin_female) end
 
-			-- Inventory
-			if result[1].inventory and result[1].inventory ~= '' then
-				userData.inventory = json.decode(result[1].inventory)
-			end
+		-- Inventory
+		if result.inventory and result.inventory ~= '' then
+			userData.inventory = json.decode(result.inventory)
+		end
 
-			-- Group
-			if result[1].group then
-				userData.group = result[1].group
-			else
-				userData.group = 'user'
-			end
+		-- Group
+		userData.group = result.group or 'user'
 
-			-- Position
-			if result[1].position and result[1].position ~= '' then
-				userData.coords = json.decode(result[1].position)
-			else
-				print('[^3WARNING^7] Column ^5"position"^0 in ^5"users"^0 table is missing required default value. Using backup coords, fix your database.')
-				userData.coords = {x = -269.4, y = -955.3, z = 31.2, heading = 205.8}
-			end
+		-- Position
+		if result.position and result.position ~= '' then
+			userData.coords = json.decode(result.position)
+		else
+			userData.coords = {x = -269.4, y = -955.3, z = 31.2, heading = 205.8}
+		end
 
-			-- Skin
-			if result[1].skin and result[1].skin ~= '' then
-				userData.skin = json.decode(result[1].skin)
-			else
-				if userData.sex == 'f' then userData.skin = {sex=1} else userData.skin = {sex=0} end
-			end
+		-- Skin
+		if result.skin and result.skin ~= '' then
+			userData.skin = json.decode(result.skin)
+		elseif userData.sex == 'f' then
+			userData.skin = {sex=1}
+		else
+			userData.skin = {sex=0}
+		end
 
-			-- Identity
-			if result[1].firstname and result[1].firstname ~= '' then
-				userData.firstname = result[1].firstname
-				userData.lastname = result[1].lastname
-				userData.playerName = userData.firstname..' '..userData.lastname
-				if result[1].dateofbirth then userData.dateofbirth = result[1].dateofbirth end
-				if result[1].sex then userData.sex = result[1].sex end
-				if result[1].height then userData.height = result[1].height end
-			end
+		-- Identity
+		if result.firstname and result.firstname ~= '' then
+			userData.firstname = result.firstname
+			userData.lastname = result.lastname
+			userData.playerName = userData.firstname..' '..userData.lastname
+			if result.dateofbirth then userData.dateofbirth = result.dateofbirth end
+			if result.sex then userData.sex = result.sex end
+			if result.height then userData.height = result.height end
+		end
 
-			cb()
-		end)
-	end)
+		-- Statebags
+		Player.firstName = userData.firstname
+		Player.lastName = userData.lastname
+		Player.name = ('%s %s'):format(userData.firstname, userData.playerName)
+		Player.job = jobObject.label
+		Player.grade = gradeObject.label
 
-	Async.parallel(tasks, function(results)
+		-- Create xPlayer object
 		local xPlayer = CreateExtendedPlayer(playerId, identifier, userData.group, userData.accounts, userData.job, userData.playerName, userData.coords)
 		ESX.Players[playerId] = xPlayer
 
@@ -280,7 +263,7 @@ if Config.Multichar then
 	end)
 end
 
-RegisterNetEvent('esx:updateCoords')
+RegisterServerEvent('esx:updateCoords')
 AddEventHandler('esx:updateCoords', function(coords)
 	local xPlayer = ESX.GetPlayerFromId(source)
 
@@ -331,8 +314,8 @@ end)
 
 AddEventHandler('txAdmin:events:scheduledRestart', function(eventData)
 	if eventData.secondsRemaining == 60 then
-		Citizen.CreateThread(function()
-			Citizen.Wait(50000)
+		CreateThread(function()
+			Wait(50000)
 			ESX.SavePlayers()
 		end)
 	end

@@ -1,0 +1,16 @@
+{
+	"Lua.diagnostics.disable": [
+		"undefined-field",
+		"undefined-global",
+		"unsupport-symbol",
+		"unknown-symbol"
+	],
+	"Lua.runtime.nonstandardSymbol": [
+		"`",
+		"+=",
+		"-=",
+		"/**/",
+		"*=",
+		"/=",
+	]
+}

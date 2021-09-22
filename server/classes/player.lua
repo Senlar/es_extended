@@ -220,8 +220,7 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, job, name, 
 	end
 
 	self.setJob = function(job, grade)
-		grade = tostring(grade)
-		local lastJob = json.decode(json.encode(self.job))
+		local lastJob = table.clone(self.job)
 
 		if ESX.DoesJobExist(job, grade) then
 			local jobObject, gradeObject = ESX.Jobs[job], ESX.Jobs[job].grades[grade]
