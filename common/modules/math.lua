@@ -17,9 +17,5 @@ ESX.Math.GroupDigits = function(value)
 end
 
 ESX.Math.Trim = function(value)
-	if value then
-		return (string.gsub(value, "^%s*(.-)%s*$", "%1"))
-	else
-		return nil
-	end
+	return value and string.strtrim(value) or nil
 end

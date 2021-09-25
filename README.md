@@ -1,4 +1,12 @@
-<h1 align='center'>ESX Legacy</a></h1><p align='center'><b><a href='https://discord.gg/cNx6HF9P5J'>Development Discord</a> - <a href='https://esx-framework.org/'>Website</a> - <a href='https://discord.gg/J6VqFPwvVp'>Support Discord</a></b></h5>
+<h1 align='center'>ESX Legacy - Overextended</a></h1><p align='center'><b>Experimental Branch</b></p>
+
+##### We'll be testing some features here. Anything that adds features or changes functionality will _not_ be added to main. I recommend looking through commits or reading the code to find changes, and either cherry-picking what you want to use or taking it as is.
+
+#### Known compatibility issues
+- Any resources that attempt to reference `ESX.Players` or `ESX.Jobs` will throw errors.
+	- Use `ESX.GetExtendedPlayers()` and `ESX.GetJobs()` instead
+
+<br><br><br><br><br><br><h1 align='center'>ESX Legacy</a></h1><p align='center'><b><a href='https://discord.gg/cNx6HF9P5J'>Development Discord</a> - <a href='https://esx-framework.org/'>Website</a> - <a href='https://discord.gg/J6VqFPwvVp'>Support Discord</a></b></h5>
 
 
 ##### ESX is the most popular framework for creating economy-based roleplay servers on FiveM, with many official and community resources designed to utilise the tools provided here. For a taste of what's available:

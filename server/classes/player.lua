@@ -223,7 +223,7 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, job, name, 
 		local lastJob = table.clone(self.job)
 
 		if ESX.DoesJobExist(job, grade) then
-			local jobObject, gradeObject = ESX.Jobs[job], ESX.Jobs[job].grades[grade]
+			local jobObject, gradeObject = Core.Jobs[job], Core.Jobs[job].grades[grade]
 
 			self.job.id    = jobObject.id
 			self.job.name  = jobObject.name

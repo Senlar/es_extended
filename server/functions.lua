@@ -5,17 +5,17 @@ ESX.Trace = function(msg)
 end
 
 ESX.SetTimeout = function(msec, cb)
-	local id = ESX.TimeoutCount + 1
+	local id = Core.TimeoutCount + 1
 
 	SetTimeout(msec, function()
-		if ESX.CancelledTimeouts[id] then
-			ESX.CancelledTimeouts[id] = nil
+		if Core.CancelledTimeouts[id] then
+			Core.CancelledTimeouts[id] = nil
 		else
 			cb()
 		end
 	end)
 
-	ESX.TimeoutCount = id
+	Core.TimeoutCount = id
 
 	return id
 end
@@ -29,10 +29,10 @@ ESX.RegisterCommand = function(name, group, cb, allowConsole, suggestion)
 		return
 	end
 
-	if ESX.RegisteredCommands[name] then
+	if Core.RegisteredCommands[name] then
 		print(('[^3WARNING^7] Command ^5"%s" already registered, overriding command^0'):format(name))
 
-		if ESX.RegisteredCommands[name].suggestion then
+		if Core.RegisteredCommands[name].suggestion then
 			TriggerClientEvent('chat:removeSuggestion', -1, ('/%s'):format(name))
 		end
 	end
@@ -44,10 +44,10 @@ ESX.RegisterCommand = function(name, group, cb, allowConsole, suggestion)
 		TriggerClientEvent('chat:addSuggestion', -1, ('/%s'):format(name), suggestion.help, suggestion.arguments)
 	end
 
-	ESX.RegisteredCommands[name] = {group = group, cb = cb, allowConsole = allowConsole, suggestion = suggestion}
+	Core.RegisteredCommands[name] = {group = group, cb = cb, allowConsole = allowConsole, suggestion = suggestion}
 
 	RegisterCommand(name, function(playerId, args, rawCommand)
-		local command = ESX.RegisteredCommands[name]
+		local command = Core.RegisteredCommands[name]
 
 		if not command.allowConsole and playerId == 0 then
 			print(('[^3WARNING^7] ^5%s'):format(_U('commanderror_console')))
@@ -96,12 +96,6 @@ ESX.RegisterCommand = function(name, group, cb, allowConsole, suggestion)
 								end
 							elseif v.type == 'string' then
 								newArgs[v.name] = args[k]
-							elseif v.type == 'item' then
-								if ESX.Items[args[k]] then
-									newArgs[v.name] = args[k]
-								else
-									error = _U('commanderror_invaliditem')
-								end
 							elseif v.type == 'weapon' then
 								if ESX.GetWeapon(args[k]) then
 									newArgs[v.name] = string.upper(args[k])
@@ -148,23 +142,23 @@ ESX.RegisterCommand = function(name, group, cb, allowConsole, suggestion)
 end
 
 ESX.ClearTimeout = function(id)
-	ESX.CancelledTimeouts[id] = true
+	Core.CancelledTimeouts[id] = true
 end
 
 ESX.RegisterServerCallback = function(name, cb)
-	ESX.ServerCallbacks[name] = cb
+	Core.ServerCallbacks[name] = cb
 end
 
-ESX.TriggerServerCallback = function(name, requestId, source, cb, ...)
-	if ESX.ServerCallbacks[name] then
-		ESX.ServerCallbacks[name](source, cb, ...)
+Core.TriggerServerCallback = function(name, requestId, source, cb, ...)
+	if Core.ServerCallbacks[name] then
+		Core.ServerCallbacks[name](source, cb, ...)
 	else
-		print(('[^3WARNING^7] Server callback ^5"%s"^0 does not exist. ^1Please Check The Server File for Errors!'):format(name))
+		print(('[^3WARNING^7] Server callback ^5"%s"^0 does not exist. Please Check The Server File for Errors!'):format(name))
 	end
 end
 
-ESX.SavePlayer = function(xPlayer, cb)
-	exports.oxmysql:execute("UPDATE users SET `accounts` = ?, `job` = ?, `job_grade` = ?, `group` = ?, `position` = ?, `inventory` = ? WHERE `identifier` = ?", {
+Core.SavePlayer = function(xPlayer, cb)
+	exports.oxmysql:update("UPDATE users SET `accounts` = ?, `job` = ?, `job_grade` = ?, `group` = ?, `position` = ?, `inventory` = ? WHERE `identifier` = ?", {
 		json.encode(xPlayer.getAccounts(true)),
 		xPlayer.job.name,
 		xPlayer.job.grade,
@@ -172,15 +166,15 @@ ESX.SavePlayer = function(xPlayer, cb)
 		json.encode(xPlayer.getCoords()),
 		json.encode(xPlayer.getInventory(true)),
 		xPlayer.identifier
-	}, function(data)
-		if data.affectedRows == 1 then
+	}, function(affectedRows)
+		if affectedRows == 1 then
 			print(('[^2INFO^7] Saved player ^5"%s^7"'):format(xPlayer.name))
 		end
 		if cb then cb() end
 	end)
 end
 
-ESX.SavePlayers = function(cb)
+Core.SavePlayers = function(cb)
 	local xPlayers = ESX.GetExtendedPlayers()
 	if #xPlayers > 0 then
 		local time = os.time()
@@ -214,18 +208,19 @@ ESX.SavePlayers = function(cb)
 
 		updateCommand = updateCommand .. ' ) vals ON u.identifier = vals.identifier SET accounts = new_accounts, job = new_job, job_grade = new_job_grade, `group` = new_group, `position` = new_position, inventory = new_inventory'
 
-		exports.oxmysql:execute(updateCommand, {},
-		function(data)
-			if data.affectedRows > 0 then
-				if cb then cb() else print(('[^2INFO^7] Saved %s of %s player(s) over %s seconds'):format(data.affectedRows, #xPlayers, os.time() - time)) end
+		exports.oxmysql:update(updateCommand, {},
+		function(affectedRows)
+			if affectedRows > 0 then
+				if cb then cb() else print(('[^2INFO^7] Saved %s of %s player(s) over %s seconds'):format(affectedRows, #xPlayers, os.time() - time)) end
 			end
 		end)
 	end
 end
+SetInterval(1, 600000, Core.SavePlayers)
 
 ESX.GetPlayers = function()
 	local sources = {}
-	for k in pairs(ESX.Players) do
+	for k in pairs(Core.Players) do
 		sources[#sources+1] = k
 	end
 	return sources
@@ -233,7 +228,7 @@ end
 
 ESX.GetExtendedPlayers = function(key, val)
 	local xPlayers = {}
-	for _, v in pairs(ESX.Players) do
+	for _, v in pairs(Core.Players) do
 		if key then
 			if (key == 'job' and v.job.name == val) or v[key] == val or v.variables[key] == val then
 				xPlayers[#xPlayers+1] = v
@@ -246,11 +241,11 @@ ESX.GetExtendedPlayers = function(key, val)
 end
 
 ESX.GetPlayerFromId = function(source)
-	return ESX.Players[source]
+	return Core.Players[tonumber(source)]
 end
 
 ESX.GetPlayerFromIdentifier = function(identifier)
-	for _,v in pairs(ESX.Players) do
+	for _,v in pairs(Core.Players) do
 		if v.identifier == identifier then
 			return v
 		end
@@ -267,11 +262,11 @@ ESX.GetIdentifier = function(playerId)
 end
 
 ESX.RegisterUsableItem = function(item, cb)
-	ESX.UsableItemsCallbacks[item] = cb
+	Core.UsableItemsCallbacks[item] = cb
 end
 
 ESX.UseItem = function(source, item)
-	ESX.UsableItemsCallbacks[item](source, item)
+	Core.UsableItemsCallbacks[item](source, item)
 end
 
 ESX.GetItemLabel = function(item)
@@ -282,22 +277,20 @@ ESX.GetItemLabel = function(item)
 end
 
 ESX.GetJobs = function()
-	return ESX.Jobs
+	return Core.Jobs
 end
 
 ESX.GetUsableItems = function()
 	local Usables = {}
-	for k in pairs(ESX.UsableItemsCallbacks) do
+	for k in pairs(Core.UsableItemsCallbacks) do
 		Usables[k] = true
 	end
 	return Usables
 end
 
 ESX.DoesJobExist = function(job, grade)
-	if job and grade then
-		if ESX.Jobs[job]?.grades[grade] then
-			return true
-		end
+	if job and grade and Core.Jobs[job]?.grades[grade] then
+		return true
 	end
 	return false
 end

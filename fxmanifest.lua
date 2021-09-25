@@ -1,6 +1,6 @@
 fx_version 'cerulean'
 game 'gta5'
-description 'ES Extended'
+description 'Overextended'
 version 'legacy'
 lua54 'yes'
 use_fxv2_oal 'yes'
@@ -11,6 +11,7 @@ shared_scripts {
 
 	'config.lua',
 	'config.weapons.lua',
+	'common/interval.lua'
 }
 
 server_scripts {
@@ -22,7 +23,8 @@ server_scripts {
 
 	'common/modules/math.lua',
 	'common/modules/table.lua',
-	'common/functions.lua'
+	'common/functions.lua',
+	'server/onesync.lua'
 }
 
 client_scripts {
@@ -66,12 +68,4 @@ files {
 
 dependencies {
 	'spawnmanager',
-}
-
-exports {
-	'getSharedObject'
-}
-
-server_exports {
-	'getSharedObject'
 }

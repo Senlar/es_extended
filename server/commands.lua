@@ -19,6 +19,8 @@ end, true, {help = _U('command_setjob'), validate = true, arguments = {
 }})
 
 ESX.RegisterCommand('car', 'admin', function(xPlayer, args, showError)
+	local vehicle = GetVehiclePedIsIn(GetPlayerPed(xPlayer.source))
+	if vehicle then DeleteEntity(vehicle) end
 	if not args.car then args.car = "baller2" end
 	xPlayer.triggerEvent('esx:spawnVehicle', args.car)
 end, false, {help = _U('command_car'), validate = false, arguments = {
@@ -89,13 +91,13 @@ end, true, {help = _U('command_setgroup'), validate = true, arguments = {
 }})
 
 ESX.RegisterCommand('save', 'admin', function(xPlayer, args, showError)
-	ESX.SavePlayer(args.playerId)
+	Core.SavePlayer(args.playerId)
 end, true, {help = _U('command_save'), validate = true, arguments = {
 	{name = 'playerId', help = _U('commandgeneric_playerid'), type = 'player'}
 }})
 
 ESX.RegisterCommand('saveall', 'admin', function(xPlayer, args, showError)
-	ESX.SavePlayers()
+	Core.SavePlayers()
 end, true, {help = _U('command_saveall')})
 
 ESX.RegisterCommand('group', {"user", "admin"}, function(xPlayer, args, showError)
@@ -143,4 +145,8 @@ ESX.RegisterCommand('players', "admin", function(xPlayer, args, showError)
 		local xPlayer = ESX.GetPlayerFromId(xAll[i])
 		print("^1[ ^2ID : ^5"..xPlayer.source.." ^0| ^2Name : ^5"..xPlayer.getName().." ^0 | ^2Group : ^5"..xPlayer.getGroup().." ^0 | ^2Identifier : ^5".. xPlayer.identifier .."^1]^0\n")
 	end
+end, true)
+
+ESX.RegisterCommand('loadjobs', 'admin', function()
+	Core.LoadJobs()
 end, true)

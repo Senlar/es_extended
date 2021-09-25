@@ -1,9 +1,10 @@
 ESX                           = {}
+Core                          = {}
 ESX.PlayerData                = {}
 ESX.PlayerLoaded              = false
-ESX.CurrentRequestId          = 0
-ESX.ServerCallbacks           = {}
-ESX.TimeoutCallbacks          = {}
+Core.CurrentRequestId          = 0
+Core.ServerCallbacks          = {}
+Core.TimeoutCallbacks          = {}
 
 ESX.UI                        = {}
 ESX.UI.HUD                    = {}
@@ -21,15 +22,15 @@ ESX.Scaleform.Utils           = {}
 ESX.Streaming                 = {}
 
 ESX.SetTimeout = function(msec, cb)
-	table.insert(ESX.TimeoutCallbacks, {
+	table.insert(Core.TimeoutCallbacks, {
 		time = GetGameTimer() + msec,
 		cb   = cb
 	})
-	return #ESX.TimeoutCallbacks
+	return #Core.TimeoutCallbacks
 end
 
 ESX.ClearTimeout = function(i)
-	ESX.TimeoutCallbacks[i] = nil
+	Core.TimeoutCallbacks[i] = nil
 end
 
 ESX.IsPlayerLoaded = function()
@@ -86,14 +87,14 @@ ESX.ShowFloatingHelpNotification = function(msg, coords)
 end
 
 ESX.TriggerServerCallback = function(name, cb, ...)
-	ESX.ServerCallbacks[ESX.CurrentRequestId] = cb
+	Core.ServerCallbacks[Core.CurrentRequestId] = cb
 
-	TriggerServerEvent('esx:triggerServerCallback', name, ESX.CurrentRequestId, ...)
+	TriggerServerEvent('esx:triggerServerCallback', name, Core.CurrentRequestId, ...)
 
-	if ESX.CurrentRequestId < 65535 then
-		ESX.CurrentRequestId = ESX.CurrentRequestId + 1
+	if Core.CurrentRequestId < 65535 then
+		Core.CurrentRequestId = Core.CurrentRequestId + 1
 	else
-		ESX.CurrentRequestId = 0
+		Core.CurrentRequestId = 0
 	end
 end
 
@@ -315,12 +316,12 @@ ESX.Game.Teleport = function(entity, coords, cb)
 	local vector = type(coords) == "vector4" and coords or type(coords) == "vector3" and vector4(coords, 0.0) or vec(coords.x, coords.y, coords.z, coords.heading or 0.0)
 
 	if DoesEntityExist(entity) then
-		RequestCollisionAtCoord(vector.xyz)
+		RequestCollisionAtCoord(vector.x, vector.y, vector.z)
 		while not HasCollisionLoadedAroundEntity(entity) do
 			Wait(0)
 		end
 
-		SetEntityCoords(entity, vector.xyz, false, false, false, false)
+		SetEntityCoords(entity, vector.x, vector.y, vector.z, false, false, false, false)
 		SetEntityHeading(entity, vector.w)
 	end
 
@@ -337,7 +338,7 @@ ESX.Game.SpawnObject = function(object, coords, cb, networked)
 	CreateThread(function()
 		ESX.Streaming.RequestModel(model)
 
-		local obj = CreateObject(model, vector.xyz, networked, false, true)
+		local obj = CreateObject(model, vector.x, vector.y, vector.z, networked, false, true)
 		if cb then
 			cb(obj)
 		end
@@ -365,7 +366,7 @@ ESX.Game.SpawnVehicle = function(vehicle, coords, heading, cb, networked)
 	CreateThread(function()
 		ESX.Streaming.RequestModel(model)
 
-		local vehicle = CreateVehicle(model, vector.xyz, heading, networked, false)
+		vehicle = CreateVehicle(model, vector.x, vector.y, vector.z, heading, networked, false)
 
 		if networked then
 			local id = NetworkGetNetworkIdFromEntity(vehicle)
@@ -377,7 +378,7 @@ ESX.Game.SpawnVehicle = function(vehicle, coords, heading, cb, networked)
 		SetModelAsNoLongerNeeded(model)
 		SetVehRadioStation(vehicle, 'OFF')
 
-		RequestCollisionAtCoord(vector.xyz)
+		RequestCollisionAtCoord(vector.x, vector.y, vector.z)
 		while not HasCollisionLoadedAroundEntity(vehicle) do
 			Wait(0)
 		end
@@ -407,10 +408,10 @@ ESX.Game.GetPeds = function(onlyOtherPeds)
 	local peds, myPed, pool = {}, ESX.PlayerData.ped, GetGamePool('CPed')
 
 	for i=1, #pool do
-        if ((onlyOtherPeds and pool[i] ~= myPed) or not onlyOtherPeds) then
-            table.insert(peds, pool[i])
-        end
-    end
+		if ((onlyOtherPeds and pool[i] ~= myPed) or not onlyOtherPeds) then
+			table.insert(peds, pool[i])
+		end
+	end
 
 	return peds
 end
@@ -443,14 +444,11 @@ local EnumerateEntitiesWithinDistance = function(entities, isPlayerEntities, coo
 	if coords then
 		coords = vector3(coords.x, coords.y, coords.z)
 	else
-		local playerPed = ESX.PlayerData.ped
-		coords = GetEntityCoords(playerPed)
+		coords = GetEntityCoords(ESX.PlayerData.ped)
 	end
 
 	for k,entity in pairs(entities) do
-		local distance = #(coords - GetEntityCoords(entity))
-
-		if distance <= maxDistance then
+		if #(coords - GetEntityCoords(entity)) <= maxDistance then
 			table.insert(nearbyEntities, isPlayerEntities and k or entity)
 		end
 	end
@@ -493,8 +491,7 @@ ESX.Game.GetClosestEntity = function(entities, isPlayerEntities, coords, modelFi
 	if coords then
 		coords = vector3(coords.x, coords.y, coords.z)
 	else
-		local playerPed = ESX.PlayerData.ped
-		coords = GetEntityCoords(playerPed)
+		coords = GetEntityCoords(ESX.PlayerData.ped)
 	end
 
 	if modelFilter then
@@ -522,15 +519,18 @@ ESX.Game.GetVehicleInDirection = function()
 	local playerPed    = ESX.PlayerData.ped
 	local playerCoords = GetEntityCoords(playerPed)
 	local inDirection  = GetOffsetFromEntityInWorldCoords(playerPed, 0.0, 5.0, 0.0)
-	local rayHandle    = StartShapeTestRay(playerCoords, inDirection, 10, playerPed, 0)
-	local numRayHandle, hit, endCoords, surfaceNormal, entityHit = GetShapeTestResult(rayHandle)
-
-	if hit == 1 and GetEntityType(entityHit) == 2 then
-		local entityCoords = GetEntityCoords(entityHit)
-		return entityHit, entityCoords
+	local rayHandle    = StartShapeTestLosProbe(playerCoords.x, playerCoords.y, playerCoords.z, inDirection, 10, ESX.PlayerData.ped, 0)
+	while true do
+		Wait(0)
+		local _, hit, _, _, entityHit = GetShapeTestResult(rayHandle)
+		if result ~= 1 then
+			if hit == 1 and GetEntityType(entityHit) == 2 then
+				local entityCoords = GetEntityCoords(entityHit)
+				return entityHit, entityCoords
+			end
+			return nil
+		end
 	end
-
-	return nil
 end
 
 ESX.Game.GetVehicleProperties = function(vehicle)
@@ -549,7 +549,7 @@ ESX.Game.GetVehicleProperties = function(vehicle)
 		return {
 			model             = GetEntityModel(vehicle),
 
-			plate             = ESX.Math.Trim(GetVehicleNumberPlateText(vehicle)),
+			plate             = string.strtrim(GetVehicleNumberPlateText(vehicle)),
 			plateIndex        = GetVehicleNumberPlateTextIndex(vehicle),
 
 			bodyHealth        = ESX.Math.Round(GetVehicleBodyHealth(vehicle), 1),
@@ -746,46 +746,38 @@ ESX.Game.Utils.DrawText3D = function(coords, text, size, font)
 	SetTextEntry('STRING')
 	SetTextCentre(true)
 	AddTextComponentString(text)
-	SetDrawOrigin(vector.xyz, 0)
+	SetDrawOrigin(vector.x, vector.y, vector.z, 0)
 	DrawText(0.0, 0.0)
 	ClearDrawOrigin()
 end
 
-RegisterNetEvent('esx:serverCallback')
-AddEventHandler('esx:serverCallback', function(requestId, ...)
-	ESX.ServerCallbacks[requestId](...)
-	ESX.ServerCallbacks[requestId] = nil
+RegisterNetEvent('esx:serverCallback', function(requestId, ...)
+	Core.ServerCallbacks[requestId](...)
+	Core.ServerCallbacks[requestId] = nil
 end)
 
-RegisterNetEvent('esx:showNotification')
-AddEventHandler('esx:showNotification', function(msg)
+RegisterNetEvent('esx:showNotification', function(msg)
 	ESX.ShowNotification(msg)
 end)
 
-RegisterNetEvent('esx:showAdvancedNotification')
-AddEventHandler('esx:showAdvancedNotification', function(sender, subject, msg, textureDict, iconType, flash, saveToBrief, hudColorIndex)
+RegisterNetEvent('esx:showAdvancedNotification', function(sender, subject, msg, textureDict, iconType, flash, saveToBrief, hudColorIndex)
 	ESX.ShowAdvancedNotification(sender, subject, msg, textureDict, iconType, flash, saveToBrief, hudColorIndex)
 end)
 
-RegisterNetEvent('esx:showHelpNotification')
-AddEventHandler('esx:showHelpNotification', function(msg, thisFrame, beep, duration)
+RegisterNetEvent('esx:showHelpNotification', function(msg, thisFrame, beep, duration)
 	ESX.ShowHelpNotification(msg, thisFrame, beep, duration)
 end)
 
 -- SetTimeout
-CreateThread(function()
-	while true do
-		local sleep = 100
-		if #ESX.TimeoutCallbacks > 0 then
-			local currTime = GetGameTimer()
-			sleep = 0
-			for i=1, #ESX.TimeoutCallbacks, 1 do
-				if currTime >= ESX.TimeoutCallbacks[i].time then
-					ESX.TimeoutCallbacks[i].cb()
-					ESX.TimeoutCallbacks[i] = nil
-				end
+SetInterval(2, 100, function()
+	if #Core.TimeoutCallbacks > 0 then
+		local currTime = GetGameTimer()
+		for i=1, #Core.TimeoutCallbacks, 1 do
+			if currTime >= Core.TimeoutCallbacks[i].time then
+				Core.TimeoutCallbacks[i].cb()
+				Core.TimeoutCallbacks[i] = nil
 			end
 		end
-		Wait(sleep)
 	end
+	if #Core.TimeoutCallbacks == 0 then SetInterval(2, 100) else SetInterval(2, 0) end
 end)

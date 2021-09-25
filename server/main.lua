@@ -13,7 +13,7 @@ end)
 
 if Config.Multichar then
 	AddEventHandler('esx:onPlayerJoined', function(src, char, data)
-		if not ESX.Players[src] then
+		if not Core.Players[src] then
 			local identifier = char..':'..ESX.GetIdentifier(src)
 			if data then
 				createESXPlayer(identifier, src, data)
@@ -24,7 +24,7 @@ if Config.Multichar then
 	end)
 else
 	RegisterServerEvent('esx:onPlayerJoined', function()
-		if not ESX.Players[source] then
+		if not Core.Players[source] then
 			onPlayerJoined(source)
 		end
 	end)
@@ -135,11 +135,11 @@ function loadESXPlayer(identifier, playerId, isNew)
 
 		-- Job
 		if ESX.DoesJobExist(job, grade) then
-			jobObject, gradeObject = ESX.Jobs[job], ESX.Jobs[job].grades[grade]
+			jobObject, gradeObject = Core.Jobs[job], Core.Jobs[job].grades[grade]
 		else
 			print(('[^3WARNING^7] Ignoring invalid job for %s [job: %s, grade: %s]'):format(identifier, job, grade))
 			job, grade = 'unemployed', 0
-			jobObject, gradeObject = ESX.Jobs[job], ESX.Jobs[job].grades[grade]
+			jobObject, gradeObject = Core.Jobs[job], Core.Jobs[job].grades[grade]
 		end
 
 		userData.job.id = jobObject.id
@@ -200,7 +200,7 @@ function loadESXPlayer(identifier, playerId, isNew)
 
 		-- Create xPlayer object
 		local xPlayer = CreateExtendedPlayer(playerId, identifier, userData.group, userData.accounts, userData.job, userData.playerName, userData.coords)
-		ESX.Players[playerId] = xPlayer
+		Core.Players[playerId] = xPlayer
 
 		if userData.firstname then
 			xPlayer.set('firstName', userData.firstname)
@@ -223,7 +223,7 @@ function loadESXPlayer(identifier, playerId, isNew)
 		}, isNew, userData.skin)
 
 		TriggerEvent('ox_inventory:setPlayerInventory', xPlayer, userData.inventory)
-		xPlayer.triggerEvent('esx:registerSuggestions', ESX.RegisteredCommands)
+		xPlayer.triggerEvent('esx:registerSuggestions', Core.RegisteredCommands)
 		print(('[^2INFO^0] Player ^5"%s" ^0has connected to the server. ID: ^5%s^7'):format(xPlayer.getName(), playerId))
 	end)
 end
@@ -243,8 +243,8 @@ AddEventHandler('playerDropped', function(reason)
 	if xPlayer then
 		TriggerEvent('esx:playerDropped', playerId, reason)
 
-		ESX.SavePlayer(xPlayer, function()
-			ESX.Players[playerId] = nil
+		Core.SavePlayer(xPlayer, function()
+			Core.Players[playerId] = nil
 		end)
 	end
 end)
@@ -255,16 +255,15 @@ if Config.Multichar then
 		if xPlayer then
 			TriggerEvent('esx:playerDropped', playerId, reason)
 
-			ESX.SavePlayer(xPlayer, function()
-				ESX.Players[playerId] = nil
+			Core.SavePlayer(xPlayer, function()
+				Core.Players[playerId] = nil
 			end)
 		end
 		TriggerClientEvent("esx:onPlayerLogout", playerId)
 	end)
 end
 
-RegisterServerEvent('esx:updateCoords')
-AddEventHandler('esx:updateCoords', function(coords)
+RegisterServerEvent('esx:updateCoords', function(coords)
 	local xPlayer = ESX.GetPlayerFromId(source)
 
 	if xPlayer then
@@ -316,7 +315,7 @@ AddEventHandler('txAdmin:events:scheduledRestart', function(eventData)
 	if eventData.secondsRemaining == 60 then
 		CreateThread(function()
 			Wait(50000)
-			ESX.SavePlayers()
+			Core.SavePlayers()
 		end)
 	end
 end)
