@@ -211,7 +211,7 @@ Core.SavePlayers = function(cb)
 		exports.oxmysql:update(updateCommand, {},
 		function(affectedRows)
 			if affectedRows > 0 then
-				if cb then cb() else print(('[^2INFO^7] Saved %s of %s player(s) over %s seconds'):format(affectedRows, #xPlayers, os.time() - time)) end
+				if type(cb) == 'function' then cb() else print(('[^2INFO^7] Saved %s of %s player(s) over %s seconds'):format(affectedRows, #xPlayers, os.time() - time)) end
 			end
 		end)
 	end
