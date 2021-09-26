@@ -3,7 +3,6 @@ game 'gta5'
 description 'ES Extended'
 version 'legacy'
 lua54 'yes'
-use_fxv2_oal 'yes'
 
 shared_scripts {
 	'locale.lua',
