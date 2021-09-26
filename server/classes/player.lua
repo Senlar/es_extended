@@ -20,7 +20,8 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, job, name, 
 	self.maxWeight = Config.MaxWeight
 	if Config.Multichar then self.license = Config.Identifier .. string.sub(identifier, 6) else self.license = Config.Identifier .. ':'..identifier end
 
-	ExecuteCommand(('add_principal identifier.%s group.%s'):format(self.license, self.group))
+	ExecuteCommand(('add_principal player.%s group.%s'):format(self.source, self.group))
+	ExecuteCommand(('add_principal player.%s group.%s'):format(self.source, self.job.name))
 
 	self.triggerEvent = function(eventName, ...)
 		TriggerClientEvent(eventName, self.source, ...)
@@ -71,9 +72,9 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, job, name, 
 	end
 
 	self.setGroup = function(newGroup)
-		ExecuteCommand(('remove_principal identifier.%s group.%s'):format(self.license, self.group))
+		ExecuteCommand(('remove_principal player.%s group.%s'):format(self.source, self.group))
 		self.group = newGroup
-		ExecuteCommand(('add_principal identifier.%s group.%s'):format(self.license, self.group))
+		ExecuteCommand(('add_principal player.%s group.%s'):format(self.source, self.group))
 	end
 
 	self.getGroup = function()
@@ -220,9 +221,13 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, job, name, 
 	end
 
 	self.setJob = function(job, grade)
-		local lastJob = table.clone(self.job)
-
 		if ESX.DoesJobExist(job, grade) then
+			
+			if self.job.name ~= job then
+				ExecuteCommand(('remove_principal player.%s group.%s'):format(self.source, self.job.name))
+			end
+
+			local lastJob = table.clone(self.job)
 			local jobObject, gradeObject = Core.Jobs[job], Core.Jobs[job].grades[grade]
 
 			self.job.id    = jobObject.id
@@ -244,6 +249,10 @@ function CreateExtendedPlayer(playerId, identifier, group, accounts, job, name, 
 				self.job.skin_female = json.decode(gradeObject.skin_female)
 			else
 				self.job.skin_female = {}
+			end
+
+			if self.job.name ~= job then
+				ExecuteCommand(('add_principal player.%s group.%s'):format(self.source, self.job.name))
 			end
 
 			TriggerEvent('esx:setJob', self.source, self.job, lastJob)

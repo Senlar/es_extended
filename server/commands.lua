@@ -1,3 +1,6 @@
+ExecuteCommand('add_principal group.admin group.user')
+ExecuteCommand('add_principal group.superadmin group.admin')
+
 ESX.RegisterCommand('setcoords', 'admin', function(xPlayer, args, showError)
 	xPlayer.setCoords({x = args.x, y = args.y, z = args.z})
 end, false, {help = _U('command_setcoords'), validate = true, arguments = {
@@ -73,10 +76,6 @@ end, true, {help = 'set account money', validate = true, arguments = {
 	{name = 'account', help = 'valid account name', type = 'string'},
 	{name = 'amount', help = 'amount to set', type = 'number'}
 }})
-
-ESX.RegisterCommand({'clear', 'cls'}, 'user', function(xPlayer, args, showError)
-	xPlayer.triggerEvent('chat:clear')
-end, false, {help = _U('command_clear')})
 
 ESX.RegisterCommand({'clearall', 'clsall'}, 'admin', function(xPlayer, args, showError)
 	TriggerClientEvent('chat:clear', -1)

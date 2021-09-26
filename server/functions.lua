@@ -22,29 +22,24 @@ end
 
 ESX.RegisterCommand = function(name, group, cb, allowConsole, suggestion)
 	if type(name) == 'table' then
-		for k,v in ipairs(name) do
-			ESX.RegisterCommand(v, group, cb, allowConsole, suggestion)
+		for i=1, #name do
+			ESX.RegisterCommand(name[i], group, cb, allowConsole, suggestion)
 		end
-
 		return
 	end
 
 	if Core.RegisteredCommands[name] then
-		print(('[^3WARNING^7] Command ^5"%s" already registered, overriding command^0'):format(name))
-
 		if Core.RegisteredCommands[name].suggestion then
 			TriggerClientEvent('chat:removeSuggestion', -1, ('/%s'):format(name))
 		end
 	end
 
 	if suggestion then
-		if not suggestion.arguments then suggestion.arguments = {} end
 		if not suggestion.help then suggestion.help = '' end
-
 		TriggerClientEvent('chat:addSuggestion', -1, ('/%s'):format(name), suggestion.help, suggestion.arguments)
 	end
 
-	Core.RegisteredCommands[name] = {group = group, cb = cb, allowConsole = allowConsole, suggestion = suggestion}
+	Core.RegisteredCommands[name] = {name = name, group = group, cb = cb, allowConsole = allowConsole, suggestion = suggestion}
 
 	RegisterCommand(name, function(playerId, args, rawCommand)
 		local command = Core.RegisteredCommands[name]
@@ -52,16 +47,15 @@ ESX.RegisterCommand = function(name, group, cb, allowConsole, suggestion)
 		if not command.allowConsole and playerId == 0 then
 			print(('[^3WARNING^7] ^5%s'):format(_U('commanderror_console')))
 		else
-			local xPlayer, error = ESX.GetPlayerFromId(playerId), nil
+			if playerId == 0 or IsPlayerAceAllowed(playerId, ('command.%s'):format(name)) then
+				local xPlayer, error = ESX.GetPlayerFromId(playerId), nil
 
-			if command.suggestion then
-				if command.suggestion.validate then
-					if #args ~= #command.suggestion.arguments then
-						error = _U('commanderror_argumentmismatch', #args, #command.suggestion.arguments)
+				if command.suggestion?.arguments then
+					if command.suggestion.validate then
+						if #args ~= #command.suggestion.arguments then
+							error = _U('commanderror_argumentmismatch', #args, #command.suggestion.arguments)
+						end
 					end
-				end
-
-				if not error and command.suggestion.arguments then
 					local newArgs = {}
 
 					for k,v in ipairs(command.suggestion.arguments) do
@@ -112,22 +106,22 @@ ESX.RegisterCommand = function(name, group, cb, allowConsole, suggestion)
 
 					args = newArgs
 				end
-			end
 
-			if error then
-				if playerId == 0 then
-					print(('[^3WARNING^7] %s^7'):format(error))
-				else
-					xPlayer.triggerEvent('chat:addMessage', {args = {'^1SYSTEM', error}})
-				end
-			else
-				cb(xPlayer or false, args, function(msg)
+				if error then
 					if playerId == 0 then
-						print(('[^3WARNING^7] %s^7'):format(msg))
+						print(('[^3WARNING^7] %s^7'):format(error))
 					else
-						xPlayer.triggerEvent('chat:addMessage', {args = {'^1SYSTEM', msg}})
+						xPlayer.triggerEvent('chat:addMessage', {args = {'^1SYSTEM', error}})
 					end
-				end)
+				else
+					cb(xPlayer or false, args, function(msg)
+						if playerId == 0 then
+							print(('[^3WARNING^7] %s^7'):format(msg))
+						else
+							xPlayer.triggerEvent('chat:addMessage', {args = {'^1SYSTEM', msg}})
+						end
+					end)
+				end
 			end
 		end
 	end, true)

@@ -236,29 +236,27 @@ AddEventHandler('chatMessage', function(playerId, author, message)
 	end
 end)
 
-AddEventHandler('playerDropped', function(reason)
-	local playerId = source
+local Logout = function(playerId)
 	local xPlayer = ESX.GetPlayerFromId(playerId)
-
 	if xPlayer then
 		TriggerEvent('esx:playerDropped', playerId, reason)
+
+		ExecuteCommand(('remove_principal player.%s group.%s'):format(xPlayer.source, xPlayer.group))
+		ExecuteCommand(('remove_principal player.%s group.%s'):format(xPlayer.source, xPlayer.job.name))
 
 		Core.SavePlayer(xPlayer, function()
 			Core.Players[playerId] = nil
 		end)
 	end
+end
+
+AddEventHandler('playerDropped', function(reason)
+	Logout(source)
 end)
 
 if Config.Multichar then
 	AddEventHandler('esx:playerLogout', function(playerId)
-		local xPlayer = ESX.GetPlayerFromId(playerId)
-		if xPlayer then
-			TriggerEvent('esx:playerDropped', playerId, reason)
-
-			Core.SavePlayer(xPlayer, function()
-				Core.Players[playerId] = nil
-			end)
-		end
+		Logout(playerId)
 		TriggerClientEvent("esx:onPlayerLogout", playerId)
 	end)
 end
